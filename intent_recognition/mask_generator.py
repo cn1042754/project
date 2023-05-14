@@ -8,7 +8,8 @@ default_num_splits=5
 class MaskGenerator:
 
     def __init__(self,name,n_splits=default_num_splits,test=None):
-        np.random.seed(123)
+        np.random.seed(123) #Manually seed the random generator to get repeatable results
+        #Initialise the varaibles
         self.n_splits=n_splits
         self.name=name
         self.test_indexing=True
@@ -35,6 +36,7 @@ class MaskGenerator:
         if not os.path.exists(path):
             print(name)
             os.mkdir(path)
+            #Split the tap gesture data
             for uid in [x for x in utils.user_ids if x!=self.uid]:
                 gids=utils.gesture_ids[uid]
                 if not self.terminal:
@@ -63,6 +65,7 @@ class MaskGenerator:
                 testing=gids
                 file_path=path+'test-'+uid+'-gestures.csv'
                 self.store(testing,file_path)
+            #Split the non-gesture data
             if not self.user or (self.user and len(utils.nongesture_ids[self.uid])==0):
                 if (self.user and len(utils.nongesture_ids[self.uid])==0) or self.terminal:
                     num_splits=n_splits
@@ -102,12 +105,14 @@ class MaskGenerator:
                 self.store(testing,file_path)
 
     def store(self,gids,path):
+        #Store the given gesture ids in the specified file
         with open(path,'w',newline='') as file:
             writer=csv.writer(file)
             for gid in gids:
                 writer.writerow([gid])
 
     def read(self,path):
+        #Read the gesture ids from a csv file
         try:
             with open(path,'r') as file:
                 data=csv.reader(file)
@@ -117,6 +122,7 @@ class MaskGenerator:
             return []
 
     def get_mask(self,name):
+        #Retrieves the gesture and non-gesture ids for the specified mask or split
         gestureids={}
         path='masks/'+self.name+'/'+name
         for uid in utils.user_ids:
@@ -127,6 +133,7 @@ class MaskGenerator:
         return gestureids
 
     def combine(self,splits):
+        #Combines a list of splits
         to_return={}
         for split in splits:
             for uid in split:
@@ -137,12 +144,14 @@ class MaskGenerator:
         return to_return
 
     def get_splits(self):
+        #Gets a list of the splits
         splits=[]
         for i in range(self.n_splits):
             splits.append(self.get_mask('split'+str(i)))
         return splits
 
     def get_train(self,val_split_index=0,test_split_index=-1):
+        #Retrieves the training mask for the given validation and test split indices
         splits=self.get_splits()
         if self.test_indexing and not self.user and not self.terminal:
             splits=[splits[i] for i in range(len(splits)) if (i!=test_split_index)]
@@ -150,6 +159,7 @@ class MaskGenerator:
         return self.combine(splits_train)
 
     def get_validation(self,val_split_index=0,test_split_index=-1):
+        #Retrieves the validation mask for the given validation and test split indices
         if not self.test_indexing or self.user or self.terminal:
             return self.get_mask('split'+str(val_split_index))
         splits=self.get_splits()
@@ -157,17 +167,21 @@ class MaskGenerator:
         return splits_no_test[val_split_index]
 
     def get_testing(self,test_split_index=0):
+        #Retrieves the test mask for the given validation and test split indices
         if self.user:
             return self.get_mask('test')
         elif self.terminal:
             return self.combine([self.get_mask('test'),self.get_mask('split'+str(test_split_index))])
         else:
             return self.get_mask('split'+str(test_split_index))
-
+        
+#Create the general mask
 general_mask=MaskGenerator("General")
+#For each user create a mask  using that user's data as the test data
 user_masks={}
 for uid in utils.user_ids:
     user_masks[uid]=MaskGenerator("User mask-"+uid,test=uid)
+#For each terminal create a mask using that terminal's data as the test data
 terminal_masks={}
 for tid in utils.terminal_ids:
     terminal_masks[tid]=MaskGenerator("Terminal mask-"+tid,test=tid)
