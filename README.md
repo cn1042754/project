@@ -1,5 +1,6 @@
-This Github repository contains the code and related files related to my project report.
+This Github repository contains the code and files related to my project report.
 
+The report.pdf file is a copy of the project report.
 
 The times.csv file contains the phase transition times used for this project.
 
