@@ -1,3 +1,5 @@
+#This module contains the main gesture model class and performs the experiments
+
 import mask_generator,utils
 import os,joblib,time
 import numpy as np
@@ -9,25 +11,25 @@ import matplotlib.pyplot as plt
 from feature_extractor import extract_features,extract_limited_features
 from combination_model import combinations,tree_combination,forest_combination
 
-threshold_step_size=0.001
-chunk_size=1000
+threshold_step_size=0.001 #The gap between candidate decision thresholds
+chunk_size=1000 #The number of gestures to pass to the phase models at one time
 
-def time_str():
+def time_str(): #Returns a string of the current time
     return time.strftime("%H:%M:%S",time.localtime())
 
-def topKIndices(l,k=5,reverse=True):
+def topKIndices(l,k=5,reverse=True): #Returns the indices of the largest k values in the given list (or smallest when reverse is false)
     temp=[(i,l[i]) for i in range(len(l))]
     temp.sort(reverse=reverse,key=(lambda x: x[1]))
     return [i for i,_ in temp[:k]]
 
-class Predict:
+class Predict: #A class that manages the combination models
 
     def __init__(self,gesture_model,combination_models={},threshold=0):
         self.models=combination_models
         self.threshold=threshold
         self.gesture_model=gesture_model
 
-    def __call__(self,name,data=None):
+    def __call__(self,name,data=None): #Return the class predictions of the specified model on the given data or the test data corresponding to the model
         model=self.models[name]
         if data is None:
             results=self.predictions[name]
@@ -35,10 +37,10 @@ class Predict:
             results=model(data)
         return [result>=self.threshold for result in results]
     
-    def set_threshold(self,threshold):
+    def set_threshold(self,threshold): #Set the decision threshold to use
         self.threshold=threshold
 
-    def set_models(self,combination_models):
+    def set_models(self,combination_models): #Change the type of combination model  to use
         self.models=combination_models
         try:
             with open(self.gesture_model.path+'combination-'+self.models['0-0'].name+'-'+'-'.join(self.gesture_model.phases)+'.predictions','rb') as f:
@@ -56,6 +58,7 @@ class Predict:
 class GestureModel:
 
     def __init__(self,name,mask_gen,val_indices=list(range(mask_generator.default_num_splits-1)),test_indices=list(range(mask_generator.default_num_splits)),phases=utils.phases,window_sizes=utils.window_sizes,aggregate=max_aggregation,notes='',time_before_zero=False,removed=[],loading_updates=False,limited_sensors=False,combination_model=None):
+        #Initialise some variables
         self.removed=removed
         self.loading_updates=loading_updates
         self.notes=notes
@@ -94,7 +97,7 @@ class GestureModel:
         exists=True
         val_results_to_calc=[]
         if loading_updates:
-            print("Attempting to load validation results counts",time_str())
+            print("Attempting to load validation results",time_str())
         for uid in utils.user_ids:
             for test_index in self.test_indices:
                 for val_index in self.val_indices:
@@ -130,11 +133,11 @@ class GestureModel:
             if len(val_results_to_calc)==0:
                 print('Successful')
             else:
-                print('Failed, will calculate validation result counts for',len(val_results_to_calc),'validation splits')
+                print('Failed, will calculate validation results for',len(val_results_to_calc),'validation splits')
         self.test_results={}
         test_results_to_calc=[]
         if loading_updates:
-            print('Attempting to load test results counts',time_str())
+            print('Attempting to load test results',time_str())
         for uid in utils.user_ids:
             for test_index in self.test_indices:
                 for random_state in self.random_states:
@@ -168,7 +171,7 @@ class GestureModel:
             if len(test_results_to_calc)==0:
                 print('Successful')
             else:
-                print('Failed, will produce and calculate the combined phase models and test result counts for',len(test_results_to_calc),'test splits')
+                print('Failed, will produce and calculate the combined phase models and test results for',len(test_results_to_calc),'test splits')
         if loading_updates:
             print('Loading combined phase models',time_str())
         for test_index in self.test_indices:
@@ -186,7 +189,8 @@ class GestureModel:
                             combined_phase_models.append(combine_phase_models(phase_models,name+'-'+phase+'-'+str(window_size)))
                     self.combined_phase_models[name]=combined_phase_models
                     with open(path+name+'.phase_models','wb') as f:
-                        joblib.dump(combined_phase_models,f,True)    
+                        joblib.dump(combined_phase_models,f,True)  
+        #If at least one load failed then produce the missing data
         if not exists:
             data={}
             for uid,test_index,val_index,random_state in val_results_to_calc:
@@ -282,7 +286,7 @@ class GestureModel:
         self.set_combination_model(combination_model)
 
 
-    def getTestIDs(self,name):
+    def getTestIDs(self,name): #Produces a list of the test ids
         test_index=int(name.split('-')[0])
         test_mask=self.mask_gen.get_testing(test_index)
         temp=[]
@@ -290,7 +294,7 @@ class GestureModel:
             temp+=[(uid,gid) for gid in test_mask[uid]]
         return temp
         
-    def evaluate(self,stats,threshold=None,filter=(lambda x: True)):
+    def evaluate(self,stats,threshold=None,filter=(lambda x: True)): #Evaluate the gesture model on each of the given statistics for the test data
         results={}
         if threshold is None:
             self.predict.set_threshold(self.best_threshold)
@@ -313,7 +317,7 @@ class GestureModel:
             results[name]=mean_aggregation(results[name])
         return results
     
-    def getEER(self,graph=False):
+    def getEER(self,graph=False): #Optimises the model for the EER and returns this value, grpahing the FPR, FNR and error when graph is True
         diff_stat=StatsFunction('diff',(lambda x: abs(false_negative_rate(x)-false_positive_rate(x))))
         eer=StatsFunction('eer',0.5*false_negative_rate+0.5*false_positive_rate)
         results={}
@@ -339,7 +343,7 @@ class GestureModel:
         self.best_threshold=best_threshold
         return results[best_threshold]['eer']
     
-    def remove_phases(self,phases):
+    def remove_phases(self,phases): #Return a new gesture model with the specified phases removed
         old_phases=[]
         for i in range(len(self.phases)+len(self.removed)):
             if i in self.removed:
@@ -353,7 +357,7 @@ class GestureModel:
                 removed.append(i)
         return GestureModel(self.name_no_mask,self.mask_gen,self.val_indices,self.test_indices,new_phases,self.window_sizes,self.aggregate,notes=self.notes+','.join(phases)+' removed\n',removed=self.removed+removed,loading_updates=self.loading_updates,combination_model=self.combination_model)
 
-    def set_combination_model(self,combination_model=None):
+    def set_combination_model(self,combination_model=None): #Set and train the combination models
         self.combination_model=combination_model
         self.predict=Predict(self)
         if combination_model is None:
@@ -379,7 +383,7 @@ class GestureModel:
             with open(self.path+'combination-'+combination_model().name+'-'+'-'.join(self.phases)+'.combination_models','wb') as f:
                 joblib.dump(combination_models,f,True)
 
-    def getFeatureImportance(self,phases=None,k=0,prefix=''):
+    def getFeatureImportance(self,phases=None,k=0,prefix=''): #Return the top k features by gini importance filtering by phase
         if phases is None:
             phases=self.phases
         feature_names=self.extract_features.feature_names
@@ -404,7 +408,7 @@ class GestureModel:
             print(prefix,name,importance)
         return importances
     
-    def getPhaseImportance(self,comb='forest',average_over_window_sizes=True,prefix=''):
+    def getPhaseImportance(self,comb='forest',average_over_window_sizes=True,prefix=''): #Get the gini importances for the phases
         if comb=='tree':
             self.set_combination_model(tree_combination)
         else:
@@ -439,7 +443,7 @@ class GestureModel:
                 print(prefix,phase,str(window_size)+'s',importance)
         return importances
 
-def try_combinations(gesture_model,name='',combination_models=combinations,display=True,stats=stats):
+def try_combinations(gesture_model,name='',combination_models=combinations,display=True,stats=stats): #Gets the EER and evaluates the given gesture model for each given combination model and statistic
     model_stats={}
     for model in combination_models:
         gesture_model.set_combination_model(model)
@@ -453,7 +457,7 @@ def try_combinations(gesture_model,name='',combination_models=combinations,displ
             print()
     return model_stats
     
-def average_stats(stats_list):
+def average_stats(stats_list): #Average the statistics over a list
     temp={}
     counts={}
     for stats in stats_list:
@@ -472,14 +476,14 @@ def average_stats(stats_list):
             temp[model_name][stat]/=counts[model_name][stat]
     return temp
     
-def print_stats(stats,prefix=''):
+def print_stats(stats,prefix=''): #Print a list of stats with a given prefix
     for model_name in stats:
         for stat in stats[model_name]:
             print(prefix,model_name,stat+':',stats[model_name][stat])
         print()
     print()
 
-def getPhaseModelNames(mask,phase,test_indexes=list(range(mask_generator.default_num_splits)),val_indices=list(range(mask_generator.default_num_splits-1))):
+def getPhaseModelNames(mask,phase,test_indexes=list(range(mask_generator.default_num_splits)),val_indices=list(range(mask_generator.default_num_splits-1))): #Returns a list of phase models
     if mask.user or mask.terminal:
         test_indices=[0]
         random_states=test_indexes
@@ -488,14 +492,14 @@ def getPhaseModelNames(mask,phase,test_indexes=list(range(mask_generator.default
         random_states=[0]
     return [('-'.join([mask.name,phase,str(window_size)+'s',str(test_index),str(val_index)]),window_size,random_state) for val_index in val_indices for test_index in test_indices for window_size in utils.window_sizes for random_state in random_states]
 
-def getFeatureImportances(phase_model_names,k=5):
+def getFeatureImportances(phase_model_names,k=5): #Gets the feature importances for each phase model specified
     temp=[]
     for name,window_size,random_state in phase_model_names:
         model=PhaseModel(name,window_size,[],[],random_state)
         temp+=model.getTopKFeatures(k)
     return temp
 
-def tallyFeatureImportances(feature_indices,feature_names,k=10,prefix=''):
+def tallyFeatureImportances(feature_indices,feature_names,k=10,prefix=''): #Tallies and prints the top k features
     counts={}
     for index in feature_indices:
         if index in counts:
@@ -510,7 +514,7 @@ def tallyFeatureImportances(feature_indices,feature_names,k=10,prefix=''):
         print(name,count)
     print()
 
-def printFeatureImportances(phases,masks,feature_names,k1=5,k2=10,prefix=''):
+def printFeatureImportances(phases,masks,feature_names,k1=5,k2=10,prefix=''): #Retrieve and Print the feature importances
     indices=[]
     for phase in phases:
         temp=[]
@@ -522,23 +526,22 @@ def printFeatureImportances(phases,masks,feature_names,k1=5,k2=10,prefix=''):
     tallyFeatureImportances(indices,feature_names,k=k2,prefix=prefix)
     print()
 
-demo=True
 if __name__=="__main__":
-    if demo:
-        general_model=GestureModel('General',mask_generator.general_mask,combination_model=forest_combination)
-        _=general_model.getEER(True)
-        quit()
     general_model=GestureModel('General',mask_generator.general_mask,combination_model=forest_combination)
+    #Get the phase importances
     print("Phase Importances")
     _=general_model.getPhaseImportance()
     print()
+    #Get the overall evaluation results
     try_combinations(general_model,'Overall')
     print()
+    #For each phase evaluate the model with that phase removed
     for phase in utils.phases:
         temp_model=general_model.remove_phases([phase])
         try_combinations(temp_model,phase+' removed')
         print()
         del temp_model
+    #For each phase evaluate the model using only that phase
     for phase in utils.phases:
         phases_to_remove=[phase_name for phase_name in utils.phases if phase_name!=phase]
         temp_model=general_model.remove_phases(phases_to_remove)
@@ -546,31 +549,32 @@ if __name__=="__main__":
         print()
         del temp_model
     del general_model
+    #Evaluate the gesture model for in-store real-time usage
     general_model_no_withdrawal_before_zero_time=GestureModel('General No Withdrawal',mask_generator.general_mask,phases=[phase for phase in utils.phases if phase!='withdrawal'],time_before_zero=True)
     try_combinations(general_model_no_withdrawal_before_zero_time,'No withdrawal before 0 time')
     print()
     del general_model_no_withdrawal_before_zero_time
+    #Evaluate the model on limited sensors
     limited_sensor_model=GestureModel('limited sensors',mask_generator.general_mask,limited_sensors=True)
     try_combinations(limited_sensor_model,'Limited Sensors')
     print()
     del limited_sensor_model
+    #Evaluate the model for an unseen user
     user_stats=[]
     for uid in utils.user_ids:
         user_model=GestureModel('User Blind-'+uid,mask_generator.user_masks[uid],test_indices=[0])
         user_stats.append(try_combinations(user_model,'User '+uid,display=False))
         del user_model
     print_stats(average_stats(user_stats),'Unseen User')
+    #Evaluate the model for an unseen terminal
     terminal_stats=[]
     for tid in utils.terminal_ids:
         terminal_model=GestureModel('Terminal Blind-'+tid,mask_generator.terminal_masks[tid],test_indices=[0])
         terminal_stats.append(try_combinations(terminal_model,'Terminal '+tid,display=False))
         del terminal_model
     print_stats(average_stats(terminal_stats),'Unseen Terminal')
-
-    #Get and process the feature importances
-
+    #Get the feature importances
     masks=[mask_generator.general_mask]+list(mask_generator.user_masks.values())+list(mask_generator.terminal_masks.values())
-
     phases=utils.phases
     printFeatureImportances(phases,masks,extract_features.feature_names,prefix='Overall ')
     phases=['limited_sensors-'+ phase for phase in phases]
