@@ -1,3 +1,5 @@
+#This module contains a GUI used to acquire the phase transition times for each gesture
+
 import csv, math, os, re, shutil, sys
 from turtle import color
 import matplotlib.pyplot as plt
@@ -26,6 +28,7 @@ z_index = 5 #z-value
 w_index = 6 #GRV w-value
 e_index = 7 #Euclidean norms of unfiltered values
 
+#Generate a list of gesture ids
 for user_id in user_ids:
     file_path=getFilePath(user_id)
     with open(file_path,'r') as file:
@@ -37,6 +40,7 @@ for user_id in user_ids:
                 gesture_ids[user_id].append(datum[g_index])
 
 def getData(user_id,gesture_id,is_filtered=True):
+    #Get the data for a specified user and gesture
     file_path=getFilePath(user_id,is_filtered)
     with open(file_path,'r') as file:
         data=list(csv.reader(file))
@@ -48,6 +52,7 @@ def getData(user_id,gesture_id,is_filtered=True):
     return to_return
 
 def graph(user_id,gesture_id,is_filtered=True):
+    #Produce the graphs for the specified gesture
     data=getData(user_id,gesture_id,is_filtered)
     for i in range(4):
         sensor=sensors[i]
@@ -81,7 +86,9 @@ class GUI(tk.Frame):
 
     def __init__(self,master=None):
         self.all_set=False
+        #Create the GUI
         tk.Frame.__init__(self,master)
+        #Create the empty graphs
         self.figure=plt.figure()
         self.plots={}
         for i in range(4):
@@ -89,10 +96,12 @@ class GUI(tk.Frame):
             self.plots[sensor]=self.figure.add_subplot(2,2,i+1)
         self.canvas=FigureCanvasTkAgg(self.figure,master=root)
         self.canvas.get_tk_widget().grid(row=0,column=0,rowspan=10)
-        self.user_id_index=15
+        #Initialise the user and gesture ids
+        self.user_id_index=0
         self.user_id=user_ids[self.user_id_index]
-        self.gesture_id_index=185
+        self.gesture_id_index=0
         self.gesture_id=gesture_ids[user_id][self.gesture_id_index]
+        #Initialise a range of variables and GUI components
         self.changed=True
         self.user_label=tk.Label(master=root,text="User ID: "+self.user_id)
         self.user_label.grid(row=1,column=2,columnspan=2)
@@ -107,30 +116,32 @@ class GUI(tk.Frame):
         self.next_gesture_button=tk.Button(master=root,text="Next Gesture",command=lambda: self.nextGesture())
         self.next_gesture_button.grid(row=3,column=3)
         self.time_index=0
-        self.times=self.getTimes()
+        self.times=self.getTimes() #Load the current transition times for the inital gesture
+        #Initialise the time labels
         self.time_labels=[tk.Label(master=root,text="Time "+str(i+1)+": {:.2f}".format(self.times[i])) for i in range(4)]
         for i in range(4):
             self.time_labels[i].grid(row=5+i,column=2,columnspan=2)
         self.setTimeIndex(0)
         self.temp_time=0.0
-        self.graph()
-        self.figure.canvas.mpl_connect("motion_notify_event",self.onMouseMove)
+        self.graph() #Fill in the graphs
+        #Connect the mouse events to the relevant methods
+        self.figure.canvas.mpl_connect("motion_notify_event",self.onMouseMove) 
         self.figure.canvas.mpl_connect("button_press_event",self.onMouseClick)
 
-    def onMouseMove(self,event):
+    def onMouseMove(self,event): #Update the current time label and the red line on the graphs when the mouse is moved over the graphs
         if event.inaxes is not None:
             self.temp_time=event.xdata
             self.time_labels[self.time_index].config(text="Time "+str(self.time_index+1)+": {:.2f}".format(self.temp_time))
             self.graph(vlines=event.xdata)
 
-    def onMouseClick(self,event):
+    def onMouseClick(self,event): #When the graphs are clicked fix the current time and select the next time to update
         if event.inaxes is not None:
             if self.time_index==3:
                 self.all_set=True
             self.times[self.time_index]=self.temp_time
             self.setTimeIndex(self.time_index+1)
 
-    def getTimes(self):
+    def getTimes(self): #Loads the transition times for the current gesture
         with open(file_name,'r') as file:
             data=list(csv.reader(file))
         for datum in data:
@@ -138,7 +149,7 @@ class GUI(tk.Frame):
                 return [float(datum[i]) for i in range(2,6)]
         return [0.0]*4
         
-    def graph(self,vlines=None,is_filtered=True):
+    def graph(self,vlines=None,is_filtered=True): #Fill in the graphs
         if self.changed:
             self.data=getData(self.user_id,self.gesture_id,is_filtered)
             self.changed=False
@@ -179,13 +190,13 @@ class GUI(tk.Frame):
                 self.plots[sensor].axvline(x=time,color="black",linewidth=0.5)
         self.canvas.draw()
 
-    def setTimeIndex(self,new_value):
+    def setTimeIndex(self,new_value): #Change the index of the time being updated
         self.time_index=new_value%4
         for i in range(4):
             self.time_labels[i].config(borderwidth=0,relief="flat")
         self.time_labels[self.time_index].config(borderwidth=2,relief="solid")
 
-    def nextUser(self):
+    def nextUser(self): #Select the first gesture of the next user
         if self.all_set:
             self.store()
         self.user_id_index=(self.user_id_index+1)%len(user_ids)
@@ -197,7 +208,7 @@ class GUI(tk.Frame):
         self.changed=True
         self.graph()
 
-    def prevUser(self):
+    def prevUser(self): #Select the first gesture of the previous user
         if self.all_set:
             self.store()
         self.user_id_index=(self.user_id_index-1)%len(user_ids)
@@ -209,7 +220,7 @@ class GUI(tk.Frame):
         self.changed=True
         self.graph()
 
-    def nextGesture(self):
+    def nextGesture(self): #Select the next gesture of the current user
         if self.all_set:
             self.store()
         self.gesture_id_index=(self.gesture_id_index+1)%len(gesture_ids[self.user_id])
@@ -218,7 +229,7 @@ class GUI(tk.Frame):
         self.changed=True
         self.graph()
 
-    def prevGesture(self):
+    def prevGesture(self): #Select the previous gesture of the current user
         if self.all_set:
             self.store()
         self.gesture_id_index=(self.gesture_id_index-1)%len(gesture_ids[self.user_id])
@@ -227,7 +238,7 @@ class GUI(tk.Frame):
         self.changed=True
         self.graph()
 
-    def store(self):
+    def store(self): #Store the current transition times
         with open(file_name,'r') as file:
             data=list(csv.reader(file))
         for i in range(len(data)):
@@ -238,7 +249,7 @@ class GUI(tk.Frame):
             for datum in data:
                 writer.writerow(datum)
         
-
+#Initialise the times file
 user_index=0
 gesture_index=1
 time_indices=[2,3,4,5]
@@ -250,6 +261,7 @@ if not os.path.exists(file_name):
             for gesture_id in gesture_ids[user_id]:
                 writer.writerow([user_id,gesture_id,0.0,0.0,0.0,0.0])
 
+#Start the GUI
 root=tk.Tk()
 app=GUI(root)
 app.mainloop()
